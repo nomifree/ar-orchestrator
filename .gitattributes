@@ -1,0 +1,12 @@
+* text=auto
+
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.xlsx binary
+*.zip binary
+*.duckdb binary
+*.wal binary
