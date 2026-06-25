@@ -8,6 +8,7 @@ Interview-grade prototype for an RCM workflow intelligence layer. It uses synthe
 - Every priority score has a six-factor breakdown.
 - Every claim gets one deterministic next-best-action.
 - Managers can filter the live queue, drill into evidence, change scoring weights, and export Excel packs.
+- A claims CSV upload screen validates rows, reports errors, and can load clean rows into the queue.
 
 ## Local Setup
 
@@ -30,6 +31,8 @@ Backend API docs: `http://127.0.0.1:8000/docs`
 .venv\Scripts\python.exe -m pytest
 ```
 
+Current verification: `30 passed`.
+
 ## Key Files
 
 - `backend/app/rules.py`: workability, scoring, and next-best-action logic.
@@ -47,3 +50,4 @@ Backend API docs: `http://127.0.0.1:8000/docs`
 - Change scoring weights: queue scores and ordering refresh from the backend.
 - Open `CLM-10021`: score breakdown and action come from the rules engine.
 - Export queue/client packs: workbooks are generated from current backend data.
+- Upload the claims CSV template: validation and optional load happen through the backend, not a static UI.

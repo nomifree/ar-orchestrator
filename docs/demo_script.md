@@ -22,14 +22,19 @@ This is not a chatbot. It is a deterministic AR work queue and denial resolution
    - Save a follow-up note.
    - Queue refreshes, proving the UI is dynamic.
 
-5. Open Reps.
+5. Open Upload.
+   - Download the template.
+   - Upload it with validation first.
+   - Optionally apply it to prove the queue can ingest a CSV.
+
+6. Open Reps.
    - Emphasize recovered value and touch efficiency, not raw touches.
 
-6. Open Clients.
+7. Open Clients.
    - Export a client Excel pack.
    - Explain the sheets: AR Summary, Open Denials, Action Backlog, Top Claims, Period Trend.
 
-7. Open Settings.
+8. Open Settings.
    - Change scoring weights while keeping total at 100.
    - Save and refresh queue to show configurable rules.
 

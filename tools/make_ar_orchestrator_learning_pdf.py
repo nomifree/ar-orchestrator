@@ -300,6 +300,7 @@ def build_story():
                 ["Dashboard", "Manager view: how much risk exists today."],
                 ["Queue", "Work list: which claims to work first."],
                 ["Drilldown", "Proof screen: why this claim got this score."],
+                ["Upload", "CSV validation and optional loading into the queue."],
                 ["Exports", "Files for managers or clients."],
                 ["Tests", "Checks that prove the rules behave as expected."],
             ],
@@ -392,6 +393,11 @@ def build_story():
             "Priority labels are simple: 80 to 100 is Critical, 60 to 79 is High, 40 to 59 is Medium, and below 40 is Low.",
         )
     )
+    flow.append(
+        p(
+            "Balance points use practical AR tiers: $0-250 gets 4 points, $251-500 gets 8 points, $501-1,000 gets 15 points, and $1,001+ gets 20 points. This makes a normal $850 unpaid claim meaningful without pretending every claim is huge.",
+        )
+    )
 
     flow.append(PageBreak())
     flow.append(p("9. The Demo Claim: CLM-10021", "H1x"))
@@ -409,7 +415,7 @@ def build_story():
                 ["Claim type", "Authorization denial", "A common denial category."],
                 ["Days in AR", "96", "Old enough to be dangerous."],
                 ["Appeal deadline", "2026-07-01", "Only 6 days after the fixed demo date."],
-                ["Score", "82", "Critical."],
+                ["Score", "90", "Critical."],
                 ["Action", "File authorization appeal today or escalate.", "Clear next step."],
             ],
             widths=[1.3 * inch, 1.8 * inch, 2.6 * inch],
@@ -421,12 +427,12 @@ def build_story():
             [
                 ["Score part", "Points"],
                 ["Days AR", "25"],
-                ["Balance", "7"],
+                ["Balance", "15"],
                 ["Denial deadline", "20"],
                 ["Stale follow-up", "10"],
                 ["Payer risk", "10"],
                 ["Repeat denial", "10"],
-                ["Total", "82"],
+                ["Total", "90"],
             ],
             widths=[3.2 * inch, 1.0 * inch],
         )
@@ -438,6 +444,7 @@ def build_story():
         )
     )
 
+    flow.append(PageBreak())
     flow.append(p("10. What Each Screen Means", "H1x"))
     flow.append(
         table(
@@ -446,6 +453,7 @@ def build_story():
                 ["Dashboard", "This is the morning manager view. It shows the size of today's AR risk."],
                 ["Queue", "This is the rep work list. It ranks claims by urgency and value."],
                 ["Drilldown", "This proves the score. It shows financial facts, denial details, and timeline."],
+                ["Upload", "This proves the prototype can validate and load a claims CSV."],
                 ["Reps", "This measures recovery value and useful work, not just activity."],
                 ["Clients", "This helps leadership prepare client reports quickly."],
                 ["Settings", "This shows managers can adjust scoring weights without changing code."],
@@ -518,9 +526,10 @@ def build_story():
             "Queue rows come from the database.",
             "Scores come from the rules engine.",
             "Settings can change the scoring weights.",
+            "Upload validates a claims CSV and can load clean rows into the database.",
             "Follow-up logging changes backend data and refreshes the queue.",
             "Exports are generated from current backend data.",
-            "Tests check the important business rules.",
+            "Tests check the important business rules. Current suite: 30 passing tests.",
         ]
     )
     flow.append(
@@ -556,7 +565,7 @@ def build_story():
     flow += bullets(
         [
             "The data is synthetic, not real client data.",
-            "The upload and validation screen is not fully built yet.",
+            "The upload screen supports claims CSV only; XLSX and advanced field mapping are still next steps.",
             "There is no login, role-based access, or audit log yet.",
             "There is no live connection to a real practice management system.",
             "Production would need private hosting, PHI controls, security review, and client-specific rules.",
@@ -579,6 +588,7 @@ def build_story():
             "Dashboard: Here is the total work and risk today.",
             "Queue: Here are the claims ranked by urgency.",
             "CLM-10021: Here is why one claim is Critical.",
+            "Upload: Here is a real CSV validation and load flow.",
             "Rep scorecard: Here is how managers can measure value, not just activity.",
             "Client export: Here is how client reporting becomes faster.",
             "Settings: Here is how managers can adjust the rule weights.",
@@ -611,9 +621,9 @@ def build_story():
                 ["Question", "Simple answer"],
                 ["Why did you build this?", "Because medical billing is a cash-flow process, and poor follow-up turns recoverable AR into lost revenue."],
                 ["Is this AI?", "No. The important decisions are rules-based and explainable."],
-                ["Can it use real data?", "Yes, but production needs secure upload, PHI controls, access roles, and audit logs."],
+                ["Can it use real data?", "Yes, the prototype validates and loads claims CSV files, but production still needs PHI controls, access roles, and audit logs."],
                 ["How does it help finance?", "It reduces write-off risk, improves collections focus, and makes client reporting faster."],
-                ["What would you build next?", "Upload validation, user roles, audit logs, and real client-specific reporting."],
+                ["What would you build next?", "XLSX mapping, user roles, audit logs, and real client-specific reporting."],
                 ["Why should we care?", "It connects staff work to cash outcomes, which is the real finance value."],
             ],
             widths=[2.0 * inch, 3.65 * inch],

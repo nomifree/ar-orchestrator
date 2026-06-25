@@ -23,11 +23,12 @@
 | T09 | Dashboard UI | Live KPI cards and charts from API. |
 | T10 | Work queue UI | Filters, sorting, row click into drilldown. |
 | T11 | Claim drilldown UI | Score gauge, breakdown bars, recommended action, timeline. |
-| T12 | Demo docs/tests | README, demo script, business rules, pytest guardrails. |
+| T12 | Upload UI + validation | Claims CSV template, validation report, optional load, queue refresh. |
+| T13 | Demo docs/tests | README, demo script, business rules, pytest guardrails. |
 
 ## Deferred Tickets
 
-- CSV/XLSX upload mapper and full validation report UI.
+- XLSX upload and advanced field mapping.
 - Persistent assignment endpoint.
 - Production auth, RBAC, audit logs, private hosting, and PHI controls.
 - Vercel/Render deployment wiring after local demo is approved.

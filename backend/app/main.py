@@ -3,7 +3,7 @@ from io import BytesIO, StringIO
 import csv
 import json
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
@@ -11,6 +11,7 @@ from openpyxl import Workbook
 
 from .config import AS_OF_DATE, DEFAULT_SCORING
 from .db import connect, fetch_dicts, get_config, init_db, rebuild_queue, update_scoring_config
+from .rules import aging_bucket
 
 
 app = FastAPI(title="AR Work Queue & Denial Resolution Orchestrator", version="1.0.0")
@@ -40,6 +41,26 @@ class FollowupPayload(BaseModel):
     amount_recovered: float = 0
     next_action_date: date | None = None
     notes: str = ""
+
+
+CLAIM_UPLOAD_REQUIRED = [
+    "claim_id",
+    "client_id",
+    "payer_id",
+    "patient_id",
+    "service_date",
+    "submit_date",
+    "billed_amount",
+    "paid_amount",
+    "patient_balance",
+    "claim_status",
+    "cpt_codes",
+    "icd10_codes",
+    "claim_type",
+    "assigned_to",
+]
+CLAIM_STATUSES = {"Pending", "Paid", "Denied", "Partial", "Voided", "Active", "System Hold", "Write-Off"}
+CLAIM_TYPES = {"Professional", "Institutional"}
 
 
 @app.on_event("startup")
@@ -162,6 +183,153 @@ def filters() -> dict:
             "workability": fetch_dicts(conn, "SELECT DISTINCT workability_status AS value FROM work_queue ORDER BY value"),
             "aging": ["0-30", "31-60", "61-90", "90+"],
         }
+
+
+def parse_claim_upload_csv(content: str) -> list[dict]:
+    reader = csv.DictReader(StringIO(content))
+    if not reader.fieldnames:
+        raise HTTPException(status_code=400, detail="CSV has no header row")
+    missing = [field for field in CLAIM_UPLOAD_REQUIRED if field not in reader.fieldnames]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"missing required columns: {', '.join(missing)}")
+    return [dict(row) for row in reader]
+
+
+def validate_claim_upload_rows(conn, rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    clients = {row["client_id"] for row in fetch_dicts(conn, "SELECT client_id FROM clients")}
+    payers = {row["payer_id"] for row in fetch_dicts(conn, "SELECT payer_id FROM payers")}
+    employees = {row["employee_id"] for row in fetch_dicts(conn, "SELECT employee_id FROM employees")}
+    valid_rows = []
+    errors = []
+    for index, row in enumerate(rows, start=2):
+        row_errors = []
+        claim_id = (row.get("claim_id") or "").strip()
+        if not claim_id:
+            row_errors.append("claim_id is required")
+        if row.get("client_id") not in clients:
+            row_errors.append("client_id does not exist")
+        if row.get("payer_id") not in payers:
+            row_errors.append("payer_id does not exist")
+        if row.get("assigned_to") not in employees:
+            row_errors.append("assigned_to employee does not exist")
+        if row.get("claim_status") not in CLAIM_STATUSES:
+            row_errors.append("claim_status is invalid")
+        if row.get("claim_type") not in CLAIM_TYPES:
+            row_errors.append("claim_type is invalid")
+        if " " in (row.get("patient_id") or "").strip():
+            row_errors.append("patient_id must be anonymized; names are not allowed")
+        try:
+            service_date = date.fromisoformat(row["service_date"])
+            submit_date = date.fromisoformat(row["submit_date"])
+            if service_date > submit_date:
+                row_errors.append("service_date cannot be after submit_date")
+        except ValueError:
+            row_errors.append("service_date and submit_date must be YYYY-MM-DD")
+            service_date = submit_date = AS_OF_DATE
+        numeric = {}
+        for field in ["billed_amount", "paid_amount", "patient_balance"]:
+            try:
+                numeric[field] = float(row[field])
+                if numeric[field] < 0:
+                    row_errors.append(f"{field} cannot be negative")
+            except ValueError:
+                row_errors.append(f"{field} must be numeric")
+                numeric[field] = 0
+        if numeric["paid_amount"] > numeric["billed_amount"]:
+            row_errors.append("paid_amount cannot exceed billed_amount")
+        if row_errors:
+            errors.append({"row": index, "claim_id": claim_id or "-", "errors": row_errors})
+            continue
+        days = max((AS_OF_DATE - submit_date).days, 0)
+        valid_rows.append(
+            {
+                "claim_id": claim_id,
+                "client_id": row["client_id"],
+                "payer_id": row["payer_id"],
+                "patient_id": row["patient_id"],
+                "service_date": service_date,
+                "submit_date": submit_date,
+                "billed_amount": numeric["billed_amount"],
+                "allowed_amount": float(row.get("allowed_amount") or 0) or None,
+                "paid_amount": numeric["paid_amount"],
+                "patient_balance": numeric["patient_balance"],
+                "claim_status": row["claim_status"],
+                "days_in_ar": days,
+                "aging_bucket": aging_bucket(days),
+                "cpt_codes": row["cpt_codes"],
+                "icd10_codes": row["icd10_codes"],
+                "claim_type": row["claim_type"],
+                "blocker_owner": row.get("blocker_owner") or None,
+                "assigned_to": row["assigned_to"],
+            }
+        )
+    return valid_rows, errors
+
+
+@app.get("/api/v1/upload/claims/template.csv")
+def claim_upload_template() -> Response:
+    rows = [
+        {
+            "claim_id": "CLM-UPLOAD-001",
+            "client_id": "CLI-001",
+            "payer_id": "PAY-002",
+            "patient_id": "PAT-UPLOAD-001",
+            "service_date": "2026-03-05",
+            "submit_date": "2026-03-15",
+            "billed_amount": "1250.00",
+            "allowed_amount": "925.00",
+            "paid_amount": "0",
+            "patient_balance": "0",
+            "claim_status": "Active",
+            "cpt_codes": "99214",
+            "icd10_codes": "I10",
+            "claim_type": "Professional",
+            "blocker_owner": "",
+            "assigned_to": "EMP-001",
+        }
+    ]
+    return Response(
+        rows_to_csv(rows),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=claims_upload_template.csv"},
+    )
+
+
+@app.post("/api/v1/upload/claims")
+async def upload_claims(file: UploadFile = File(...), apply: bool = False) -> dict:
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="only CSV upload is supported in this prototype")
+    content = (await file.read()).decode("utf-8-sig")
+    rows = parse_claim_upload_csv(content)
+    with connect() as conn:
+        valid_rows, errors = validate_claim_upload_rows(conn, rows)
+        applied = 0
+        if apply and not errors and valid_rows:
+            ids = [row["claim_id"] for row in valid_rows]
+            placeholders = ", ".join(["?"] * len(ids))
+            conn.execute(f"DELETE FROM followups WHERE claim_id IN ({placeholders})", ids)
+            conn.execute(f"DELETE FROM denials WHERE claim_id IN ({placeholders})", ids)
+            conn.execute(f"DELETE FROM claims WHERE claim_id IN ({placeholders})", ids)
+            conn.executemany(
+                """
+                INSERT INTO claims
+                (claim_id, client_id, payer_id, patient_id, service_date, submit_date,
+                 billed_amount, allowed_amount, paid_amount, patient_balance, claim_status,
+                 days_in_ar, aging_bucket, cpt_codes, icd10_codes, claim_type, blocker_owner, assigned_to)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                [tuple(row.values()) for row in valid_rows],
+            )
+            applied = len(valid_rows)
+            rebuild_queue(conn)
+    return {
+        "filename": file.filename,
+        "received_rows": len(rows),
+        "valid_rows": len(valid_rows),
+        "error_rows": len(errors),
+        "applied_rows": applied,
+        "errors": errors,
+    }
 
 
 @app.get("/api/v1/queue")

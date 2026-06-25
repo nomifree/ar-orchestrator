@@ -113,7 +113,15 @@ def score_priority(
     days_points = round(days_points / 25 * cfg["weight_days_ar"])
 
     balance = dollars_outstanding(claim)
-    balance_points = round(min(balance / 2500, 1) * cfg["weight_balance"])
+    if balance <= 250:
+        balance_base = 4
+    elif balance <= 500:
+        balance_base = 8
+    elif balance <= 1000:
+        balance_base = 15
+    else:
+        balance_base = 20
+    balance_points = round(balance_base / 20 * cfg["weight_balance"])
 
     deadline_points = 0
     if latest_denial and latest_denial.get("open_flag"):

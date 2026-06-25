@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Settings,
   SlidersHorizontal,
+  UploadCloud,
   Users,
 } from "lucide-react";
 import {
@@ -35,6 +36,7 @@ const priorityColors = {
 const pages = [
   ["dashboard", "Dashboard", BarChart3],
   ["queue", "Queue", BriefcaseBusiness],
+  ["upload", "Upload", UploadCloud],
   ["reps", "Reps", Users],
   ["clients", "Clients", FileSpreadsheet],
   ["settings", "Settings", Settings],
@@ -414,6 +416,87 @@ function Clients({ reloadKey }) {
   );
 }
 
+function UploadPage({ reload }) {
+  const [file, setFile] = useState(null);
+  const [applyUpload, setApplyUpload] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submitUpload() {
+    if (!file) {
+      setError("Choose a CSV file first.");
+      return;
+    }
+    setLoading(true);
+    setError("");
+    setResult(null);
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API}/api/v1/upload/claims?apply=${applyUpload}`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await response.json();
+    setLoading(false);
+    if (!response.ok) {
+      setError(data.detail || "Upload failed.");
+      return;
+    }
+    setResult(data);
+    if (data.applied_rows > 0) await reload();
+  }
+
+  return (
+    <section className="content">
+      <Panel
+        title="Claims Upload"
+        action={<a className="icon-link" href={`${API}/api/v1/upload/claims/template.csv`}><Download size={16} /> Template</a>}
+      >
+        <div className="upload-grid">
+          <div>
+            <label className="file-picker">
+              <UploadCloud size={22} />
+              <span>{file ? file.name : "Choose claims CSV"}</span>
+              <input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+            </label>
+            <label className="checkline">
+              <input type="checkbox" checked={applyUpload} onChange={(e) => setApplyUpload(e.target.checked)} />
+              Validate and load rows into the work queue
+            </label>
+            <div className="actions">
+              <button className="primary" onClick={submitUpload} disabled={loading}>
+                {loading ? "Checking..." : "Validate Upload"}
+              </button>
+            </div>
+          </div>
+          <div className="upload-note">
+            <strong>What this accepts</strong>
+            <p>Claims CSV with anonymized patient IDs, existing client/payer/employee IDs, valid dates, valid claim status, and non-negative amounts.</p>
+            <p>It validates first. It only writes to the database when the checkbox is enabled and there are zero row errors.</p>
+          </div>
+        </div>
+        {error && <Status error text={error} />}
+        {result && (
+          <div className="upload-result">
+            <div className="kpi-grid small">
+              <div className="kpi"><span>Received Rows</span><strong>{result.received_rows}</strong></div>
+              <div className="kpi"><span>Valid Rows</span><strong>{result.valid_rows}</strong></div>
+              <div className="kpi"><span>Error Rows</span><strong>{result.error_rows}</strong></div>
+              <div className="kpi"><span>Applied Rows</span><strong>{result.applied_rows}</strong></div>
+            </div>
+            {result.errors?.length ? (
+              <MiniTable rows={result.errors.map((e) => ({ row: e.row, claim_id: e.claim_id, errors: e.errors.join("; ") }))} columns={["row", "claim_id", "errors"]} />
+            ) : (
+              <p className="ok">{result.applied_rows ? "Upload loaded and queue refreshed." : "Upload is valid. Enable load checkbox to apply it."}</p>
+            )}
+          </div>
+        )}
+      </Panel>
+    </section>
+  );
+}
+
 function SettingsPage({ reload }) {
   const loaded = useLoad(() => api("/api/v1/settings/scoring"), []);
   const [config, setConfig] = useState(null);
@@ -523,6 +606,8 @@ export default function App() {
         <Dashboard goQueue={goQueue} reloadKey={reloadKey} />
       ) : page === "queue" ? (
         <Queue initialFilters={queueFilters} selectClaim={setClaimId} reloadKey={reloadKey} />
+      ) : page === "upload" ? (
+        <UploadPage reload={refresh} />
       ) : page === "reps" ? (
         <Reps reloadKey={reloadKey} />
       ) : page === "clients" ? (
